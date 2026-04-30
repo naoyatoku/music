@@ -341,6 +341,14 @@ body {
 .bar-vline-num { position: absolute; bottom: calc(100% + 1px); left: 50%; transform: translateX(-50%); font-size: .52rem; color: var(--accent); white-space: nowrap; }
 .sn.edit-sel { border-color: var(--accent2) !important; background: rgba(232,201,107,.1) !important; }
 
+/* tie & chord active */
+.sn { position: relative; }
+.sn.tied::after { content: ''; position: absolute; right: -4px; bottom: 4px;
+  width: 8px; height: 6px; border: 1.5px solid var(--accent2);
+  border-top: none; border-radius: 0 0 8px 8px; pointer-events: none; }
+.chord-cell { cursor: pointer; transition: background .1s; }
+.chord-cell:active, .chord-cell.active { background: rgba(232,201,107,.15); }
+
 /* modal */
 .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.75); display: none; align-items: center; justify-content: center; z-index: 300; padding: 20px; }
 .modal-overlay.open { display: flex; }
@@ -457,7 +465,7 @@ function getChapter(cid){ return db.chapters.find(c=>c.id===cid); }
 const BEAT_W=56;
 const PS={};
 function getPS(pid){
-  if(!PS[pid])PS[pid]={selIdx:-1,nipOpen:false,note:'C',octave:4,dur:1};
+  if(!PS[pid])PS[pid]={selIdx:-1,nipOpen:false,note:'C',octave:4,dur:1,tie:false,ceOpen:false,ceIdx:-1,ceRoot:'C',ceQuality:'7',ceBeats:4};
   return PS[pid];
 }
 let activePhraseId = db.chapters[0]?.phrases[0]?.id ?? null;
@@ -524,19 +532,26 @@ function playPhrase(){
   });
   let beat=0;
   const total=phrase.notes.reduce((s,n)=>s+n.dur,0);
-  phrase.notes.forEach((n,i)=>{
-    const t0=ac.currentTime+beat*bs;
-    const f=NF[n.name+n.octave];
-    if(f)playTone(f,t0,n.dur*bs*.88,.45);
-    const tb=beat;
+  let ni=0;
+  while(ni<phrase.notes.length){
+    const si=ni,sb=beat;
+    let audioDur=phrase.notes[ni].dur;
+    beat+=phrase.notes[ni].dur;
+    while(phrase.notes[ni].tie&&ni+1<phrase.notes.length){
+      ni++;audioDur+=phrase.notes[ni].dur;beat+=phrase.notes[ni].dur;
+    }
+    const t0=ac.currentTime+sb*bs;
+    const f=NF[phrase.notes[si].name+phrase.notes[si].octave];
+    if(f)playTone(f,t0,audioDur*bs*.95,.45);
+    const tb=sb,sii=si;
     timers.push(setTimeout(()=>{
       document.querySelectorAll('.sn').forEach(el=>el.classList.remove('playing'));
-      document.getElementById('sn-'+i)?.classList.add('playing');
+      document.getElementById('sn-'+sii)?.classList.add('playing');
       const pb=document.getElementById('progress-fill');
       if(pb)pb.style.width=(tb/total*100)+'%';
-    },beat*bs*1000));
-    beat+=n.dur;
-  });
+    },sb*bs*1000));
+    ni++;
+  }
   timers.push(setTimeout(()=>stopAll(),total*bs*1000+400));
 }
 
@@ -601,9 +616,11 @@ function buildScoreHtml(phrase,pid,isPlayer){
   const totalBeats=Math.max(totalNoteBeats,totalChordBeats,bpb);
   let cHtml='';
   if(phrase.chords&&phrase.chords.length){
-    phrase.chords.forEach(ch=>{
+    phrase.chords.forEach((ch,ci)=>{
       const w=ch.beats*BEAT_W;
-      cHtml+=`<div class="chord-cell" style="width:${w}px"><span class="chord-cell-name">${chordName(ch.root,ch.quality)}</span></div>`;
+      const isCA=isPlayer&&ps&&ps.ceOpen&&ps.ceIdx===ci;
+      const chClick=isPlayer?`selectPlayerChord(${pid},${ci})`:'';
+      cHtml+=`<div class="chord-cell${isCA?' active':''}" style="width:${w}px"${chClick?` onclick="${chClick}"`:''}>\n        <span class="chord-cell-name">${chordName(ch.root,ch.quality)}</span>\n        </div>`;
     });
   } else {
     cHtml=`<div class="chord-cell" style="min-width:80px"><span style="font-size:.65rem;color:var(--dim)">コードなし</span></div>`;
@@ -618,7 +635,8 @@ function buildScoreHtml(phrase,pid,isPlayer){
       const w=n.dur*BEAT_W;
       const isSel=ps&&ps.selIdx===i&&ps.nipOpen;
       const clickFn=isPlayer?`selectPlayerNote(${pid},${i})`:`selectENote(${pid},${i})`;
-      nHtml+=`<div class="sn${isSel?' edit-sel':''}" id="sn-${i}" style="width:${Math.max(w,30)}px;min-width:0;flex-shrink:0;cursor:pointer" onclick="${clickFn}"><div class="sn-name" style="font-size:${w<38?'.68rem':'.82rem'}">${n.name}${n.octave}</div><div class="sn-dur">${noteSvg(n.dur,{small:true})}</div></div>`;
+      const isTied=!!n.tie;
+      nHtml+=`<div class="sn${isSel?' edit-sel':''}${isTied?' tied':''}" id="sn-${i}" style="width:${Math.max(w,30)}px;min-width:0;flex-shrink:0;cursor:pointer" onclick="${clickFn}"><div class="sn-name" style="font-size:${w<38?'.68rem':'.82rem'}">${n.name}${n.octave}</div><div class="sn-dur">${noteSvg(n.dur,{small:true})}</div></div>`;
     });
   } else {
     nHtml=`<span style="font-size:.72rem;color:var(--dim);font-style:italic;padding:12px">音符がありません</span>`;
@@ -655,8 +673,12 @@ function renderPlayer(){
   // score + inline editor
   h+=buildScoreHtml(phrase,pid,true);
   const ps=getPS(pid);
-  if(ps.nipOpen){h+=buildNipHtml(pid,ps);}
-  else{h+=`<button class="ghost-btn accent" onclick="openPlayerAddNote(${pid})" style="margin-bottom:14px">＋ 音符を追加</button>`;}
+  if(ps.ceOpen){h+=buildChordNipHtml(pid,ps);}
+  else if(ps.nipOpen){h+=buildNipHtml(pid,ps);}
+  else{
+    h+=`<button class="ghost-btn accent" onclick="openPlayerAddNote(${pid})" style="margin-bottom:8px">＋ 音符を追加</button>`;
+    h+=`<button class="ghost-btn" onclick="openPlayerAddChord(${pid})" style="margin-bottom:14px">＋ コードを追加</button>`;
+  }
   el.innerHTML=h;
 }
 
@@ -670,6 +692,7 @@ function buildNipHtml(pid,ps){
   h+=`<div class="btn-grid-5">${ACCS.map(n=>`<button class="nbtn acc${n===ps.note?' sel':''}" onclick="setPNote(${pid},'${n}')">${n}</button>`).join('')}</div>`;
   h+=`<div class="btn-row"><span class="row-tag">オクターブ</span>${[3,4,5].map(o=>`<button class="qbtn${o===ps.octave?' sel':''}" onclick="setPOct(${pid},${o})">${o}</button>`).join('')}</div>`;
   h+=`<div class="btn-row"><span class="row-tag">長さ</span>${DURS.map(d=>`<button class="qbtn${Math.abs(d.b-ps.dur)<.01?' sel':''}" onclick="setPDur(${pid},${d.b})">${noteSvg(d.b)}</button>`).join('')}</div>`;
+  h+=`<div class="btn-row"><span class="row-tag">タイ</span><button class="qbtn${ps.tie?' sel':''}" onclick="setPTie(${pid},${!ps.tie})">⌣ タイ</button></div>`;
   h+=`<div class="nip-actions">`;
   h+=`<button class="action-btn" onclick="previewPNote(${pid})">▶ 試聴</button>`;
   h+=`<button class="action-btn ok" onclick="commitPNote(${pid})">${ps.selIdx>=0?'✓ 更新':'＋ 追加'}</button>`;
@@ -682,8 +705,8 @@ function buildNipHtml(pid,ps){
 // ── Player inline edit ────────────────────────────────────────────
 function selectPlayerNote(pid,i){
   const ps=getPS(pid),p=getPhrase(pid);
-  if(ps.selIdx===i&&ps.nipOpen){ps.selIdx=-1;ps.nipOpen=false;}
-  else{ps.selIdx=i;ps.nipOpen=true;if(p.notes[i]){const n=p.notes[i];ps.note=n.name;ps.octave=n.octave;ps.dur=n.dur;}}
+  if(ps.selIdx===i&&ps.nipOpen){ps.selIdx=-1;ps.nipOpen=false;ps.ceOpen=false;}
+  else{ps.ceOpen=false;ps.selIdx=i;ps.nipOpen=true;if(p.notes[i]){const n=p.notes[i];ps.note=n.name;ps.octave=n.octave;ps.dur=n.dur;ps.tie=!!n.tie;}}
   renderPlayer();
   if(ps.nipOpen)setTimeout(()=>document.getElementById('pnip-'+pid)?.scrollIntoView({behavior:'smooth',block:'nearest'}),50);
 }
@@ -698,7 +721,7 @@ function setPDur(pid,d){getPS(pid).dur=d;renderPlayer();}
 function previewPNote(pid){const ps=getPS(pid),f=NF[ps.note+ps.octave];if(f)playTone(f,getCtx().currentTime,.35,.45);}
 function commitPNote(pid){
   const ps=getPS(pid),p=getPhrase(pid);
-  const note={name:ps.note,octave:ps.octave,dur:ps.dur};
+  const note={name:ps.note,octave:ps.octave,dur:ps.dur,tie:!!ps.tie};
   if(ps.selIdx>=0)p.notes[ps.selIdx]=note;
   else p.notes.push(note);
   ps.selIdx=-1;ps.nipOpen=false;save();renderPlayer();renderEditor();
@@ -720,7 +743,7 @@ function getES(pid){
     tab:'notes', // 'notes' | 'chords' | 'midi'
     selIdx:-1,
     nipOpen:false,
-    note:'C',octave:4,dur:.5,
+    note:'C',octave:4,dur:.5,tie:false,
     ceOpen:false,ceIdx:-1,ceRoot:'C',ceQuality:'7',ceBeats:4,
   };
   return ES[pid];
@@ -762,6 +785,9 @@ function renderEditor(){
       </div>
       <div class="btn-row"><span class="row-tag">長さ</span>
         ${DURS.map(d=>`<button class="qbtn${Math.abs(d.b-es.dur)<.01?' sel':''}" onclick="setEDur(${pid},${d.b})">${noteSvg(d.b)}</button>`).join('')}
+      </div>
+      <div class="btn-row"><span class="row-tag">タイ</span>
+        <button class="qbtn${es.tie?' sel':''}" onclick="setETie(${pid},${!es.tie})">⌣ タイ</button>
       </div>
       <div class="nip-actions">
         <button class="action-btn" onclick="previewENote(${pid})">▶ 試聴</button>
@@ -870,7 +896,7 @@ function selectENote(pid,i){
   const es=getES(pid), p=getPhrase(pid);
   if(es.selIdx===i){ closeENotePanel(pid); return; }
   es.selIdx=i; es.nipOpen=true;
-  if(p.notes[i]){const n=p.notes[i];es.note=n.name;es.octave=n.octave;es.dur=n.dur;}
+  if(p.notes[i]){const n=p.notes[i];es.note=n.name;es.octave=n.octave;es.dur=n.dur;es.tie=!!n.tie;}
   renderEditor();
   document.getElementById('nip-'+pid)?.scrollIntoView({behavior:'smooth',block:'nearest'});
 }
@@ -881,7 +907,7 @@ function setEDur(pid,d){ getES(pid).dur=d; renderEditor(); }
 function previewENote(pid){ const es=getES(pid),f=NF[es.note+es.octave]; if(f)playTone(f,getCtx().currentTime,.35,.45); }
 function commitENote(pid){
   const es=getES(pid),p=getPhrase(pid);
-  const note={name:es.note,octave:es.octave,dur:es.dur};
+  const note={name:es.note,octave:es.octave,dur:es.dur,tie:!!es.tie};
   if(es.selIdx>=0) p.notes[es.selIdx]=note;
   else p.notes.push(note);
   es.selIdx=-1; es.nipOpen=false; save(); renderEditor(); renderPlayer();
@@ -891,6 +917,60 @@ function deleteENote(pid){
   if(es.selIdx>=0)p.notes.splice(es.selIdx,1);
   es.selIdx=-1; es.nipOpen=false; save(); renderEditor(); renderPlayer();
 }
+
+
+function buildChordNipHtml(pid,ps){
+  const p=getPhrase(pid);
+  const isEdit=ps.ceIdx>=0;
+  let h='';
+  h+=`<div class="chord-input-panel open" id="pcip-${pid}">`;
+  h+=`<div class="nip-title">${isEdit?`✎ コード #${ps.ceIdx+1} を編集`:`コードを追加`}</div>`;
+  h+=`<div class="cip-preview">${chordName(ps.ceRoot,ps.ceQuality)}</div>`;
+  h+=`<div class="btn-row"><span class="row-tag">ルート</span>${NATURALS.map(n=>`<button class="nbtn${n===ps.ceRoot?' sel':''}" onclick="setPCRoot(${pid},'${n}')">${n}</button>`).join('')}</div>`;
+  h+=`<div class="btn-row">${ACCS.map(n=>`<button class="nbtn acc${n===ps.ceRoot?' sel':''}" onclick="setPCRoot(${pid},'${n}')">${n}</button>`).join('')}</div>`;
+  h+=`<div class="btn-row"><span class="row-tag">種類</span>${QUALITIES.map(q=>`<button class="qbtn${q.key===ps.ceQuality?' sel':''}" onclick="setPCQ(${pid},'${q.key}')">${q.label}</button>`).join('')}</div>`;
+  h+=`<div class="btn-row"><span class="row-tag">拍数</span>${[1,2,3,4,6,8].map(b=>`<button class="qbtn${b===ps.ceBeats?' sel':''}" onclick="setPCB(${pid},${b})">${b}</button>`).join('')}</div>`;
+  h+=`<div class="nip-actions">`;
+  h+=`<button class="action-btn" onclick="previewChord(ps.ceRoot,ps.ceQuality,ps.ceBeats,getPhrase(${pid}).tempo||100)">▶ 試聴</button>`;
+  h+=`<button class="action-btn ok" onclick="commitPC(${pid})">${isEdit?'✓ 更新':'＋ 追加'}</button>`;
+  if(isEdit)h+=`<button class="action-btn del" onclick="deletePC(${pid})">削除</button>`;
+  h+=`<button class="action-btn" onclick="closePCip(${pid})">閉じる</button>`;
+  h+=`</div></div>`;
+  return h;
+}
+function selectPlayerChord(pid,ci){
+  const ps=getPS(pid),p=getPhrase(pid);
+  if(ps.ceIdx===ci&&ps.ceOpen){ps.ceOpen=false;ps.ceIdx=-1;renderPlayer();return;}
+  ps.nipOpen=false;ps.selIdx=-1;
+  ps.ceOpen=true;ps.ceIdx=ci;
+  if(p.chords[ci]){const c=p.chords[ci];ps.ceRoot=c.root;ps.ceQuality=c.quality;ps.ceBeats=c.beats;}
+  renderPlayer();
+  setTimeout(()=>document.getElementById('pcip-'+pid)?.scrollIntoView({behavior:'smooth',block:'nearest'}),50);
+}
+function openPlayerAddChord(pid){
+  const ps=getPS(pid);ps.nipOpen=false;ps.selIdx=-1;
+  ps.ceOpen=true;ps.ceIdx=-1;ps.ceRoot='C';ps.ceQuality='7';ps.ceBeats=4;
+  renderPlayer();
+  setTimeout(()=>document.getElementById('pcip-'+pid)?.scrollIntoView({behavior:'smooth',block:'nearest'}),50);
+}
+function closePCip(pid){const ps=getPS(pid);ps.ceOpen=false;ps.ceIdx=-1;renderPlayer();}
+function setPCRoot(pid,r){getPS(pid).ceRoot=r;renderPlayer();}
+function setPCQ(pid,q){getPS(pid).ceQuality=q;renderPlayer();}
+function setPCB(pid,b){getPS(pid).ceBeats=b;renderPlayer();}
+function commitPC(pid){
+  const ps=getPS(pid),p=getPhrase(pid);
+  const ch={root:ps.ceRoot,quality:ps.ceQuality,beats:ps.ceBeats};
+  if(ps.ceIdx>=0)p.chords[ps.ceIdx]=ch;
+  else{p.chords=p.chords||[];p.chords.push(ch);}
+  ps.ceOpen=false;ps.ceIdx=-1;save();renderPlayer();renderEditor();
+}
+function deletePC(pid){
+  const ps=getPS(pid),p=getPhrase(pid);
+  if(ps.ceIdx>=0)p.chords.splice(ps.ceIdx,1);
+  ps.ceOpen=false;ps.ceIdx=-1;save();renderPlayer();renderEditor();
+}
+function setPTie(pid,v){getPS(pid).tie=v;renderPlayer();}
+function setETie(pid,v){getES(pid).tie=v;renderEditor();}
 
 // chord actions
 function openCIP(pid,idx){
