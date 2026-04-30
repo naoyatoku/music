@@ -330,6 +330,17 @@ body {
 }
 .del-phrase-btn:active { border-color: var(--red); color: var(--red); }
 
+/* score / combined strip */
+.score-wrap { overflow-x: auto; margin-bottom: 16px; padding-bottom: 6px; }
+.score-inner { width: max-content; min-width: 100%; }
+.chord-bar { display: flex; align-items: stretch; min-height: 34px; background: var(--surface3); border: 1px solid var(--border); border-bottom: none; border-radius: 6px 6px 0 0; overflow: hidden; }
+.chord-cell { flex-shrink: 0; display: flex; align-items: center; padding: 4px 10px; border-right: 1px solid var(--border); }
+.chord-cell-name { font-family: 'Playfair Display', serif; font-size: .9rem; color: var(--accent2); white-space: nowrap; }
+.note-bar { position: relative; display: flex; align-items: center; min-height: 64px; background: var(--surface2); border: 1px solid var(--border); border-top: none; border-radius: 0 0 6px 6px; padding: 8px 0; }
+.bar-vline { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--accent); opacity: .45; border-radius: 1px; pointer-events: none; z-index: 2; }
+.bar-vline-num { position: absolute; bottom: calc(100% + 1px); left: 50%; transform: translateX(-50%); font-size: .52rem; color: var(--accent); white-space: nowrap; }
+.sn.edit-sel { border-color: var(--accent2) !important; background: rgba(232,201,107,.1) !important; }
+
 /* modal */
 .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.75); display: none; align-items: center; justify-content: center; z-index: 300; padding: 20px; }
 .modal-overlay.open { display: flex; }
@@ -442,6 +453,13 @@ function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;
 function getPhrase(pid){ for(const ch of db.chapters) for(const p of ch.phrases) if(p.id===pid)return p; return null; }
 function getChapter(cid){ return db.chapters.find(c=>c.id===cid); }
 
+
+const BEAT_W=56;
+const PS={};
+function getPS(pid){
+  if(!PS[pid])PS[pid]={selIdx:-1,nipOpen:false,note:'C',octave:4,dur:1};
+  return PS[pid];
+}
 let activePhraseId = db.chapters[0]?.phrases[0]?.id ?? null;
 let timers = [];
 
@@ -574,6 +592,40 @@ function noteSvg(beats,opts){
   return`<svg width="${nw}" height="${nh}" viewBox="${vb}" style="${st}">${c}</svg>`;
 }
 
+
+function buildScoreHtml(phrase,pid,isPlayer){
+  const ps=isPlayer?getPS(pid):null;
+  const bpb=phrase.beatsPerBar||4;
+  const totalNoteBeats=phrase.notes.reduce((s,n)=>s+n.dur,0);
+  const totalChordBeats=(phrase.chords||[]).reduce((s,c)=>s+c.beats,0);
+  const totalBeats=Math.max(totalNoteBeats,totalChordBeats,bpb);
+  let cHtml='';
+  if(phrase.chords&&phrase.chords.length){
+    phrase.chords.forEach(ch=>{
+      const w=ch.beats*BEAT_W;
+      cHtml+=`<div class="chord-cell" style="width:${w}px"><span class="chord-cell-name">${chordName(ch.root,ch.quality)}</span></div>`;
+    });
+  } else {
+    cHtml=`<div class="chord-cell" style="min-width:80px"><span style="font-size:.65rem;color:var(--dim)">コードなし</span></div>`;
+  }
+  let bLines='';
+  for(let b=bpb;b<totalBeats;b+=bpb){
+    bLines+=`<div class="bar-vline" style="left:${b*BEAT_W}px"><span class="bar-vline-num">${Math.round(b/bpb)+1}</span></div>`;
+  }
+  let nHtml='';
+  if(phrase.notes.length){
+    phrase.notes.forEach((n,i)=>{
+      const w=n.dur*BEAT_W;
+      const isSel=ps&&ps.selIdx===i&&ps.nipOpen;
+      const clickFn=isPlayer?`selectPlayerNote(${pid},${i})`:`selectENote(${pid},${i})`;
+      nHtml+=`<div class="sn${isSel?' edit-sel':''}" id="sn-${i}" style="width:${Math.max(w,30)}px;min-width:0;flex-shrink:0;cursor:pointer" onclick="${clickFn}"><div class="sn-name" style="font-size:${w<38?'.68rem':'.82rem'}">${n.name}${n.octave}</div><div class="sn-dur">${noteSvg(n.dur,{small:true})}</div></div>`;
+    });
+  } else {
+    nHtml=`<span style="font-size:.72rem;color:var(--dim);font-style:italic;padding:12px">音符がありません</span>`;
+  }
+  return `<div class="score-wrap"><div class="score-inner"><div class="chord-bar">${cHtml}</div><div class="note-bar">${bLines}${nHtml}</div></div></div>`;
+}
+
 function renderPlayer(){
   const el=document.getElementById('screen-player');
   const phrase=getPhrase(activePhraseId);
@@ -600,36 +652,61 @@ function renderPlayer(){
   // progress
   h+=`<div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>`;
 
-  // note strip
-  h+=`<div class="sec-label">メロディ</div>
-  <div class="note-strip-wrap"><div class="note-strip">`;
-  if(!phrase.notes.length){
-    h+=`<span style="font-size:.72rem;color:var(--dim);font-style:italic;padding:8px">音符がありません</span>`;
-  } else {
-    let ba=0;
-    phrase.notes.forEach((n,i)=>{
-      if(i>0&&Math.abs(ba%bpb)<.01)
-        h+=`<div class="bar-div"><span class="bar-num">${Math.round(ba/bpb)+1}</span></div>`;
-      h+=`<div class="sn" id="sn-${i}"><div class="sn-name">${n.name}${n.octave}</div><div class="sn-dur">${noteSvg(n.dur,{small:true})}</div></div>`;
-      ba+=n.dur;
-    });
-  }
-  h+=`</div></div>`;
-
-  // chords
-  if(phrase.chords?.length){
-    h+=`<div class="sec-label">コード進行</div><div class="chord-cards">`;
-    phrase.chords.forEach(ch=>{
-      h+=`<div class="chord-card">
-        <div class="chord-card-name">${chordName(ch.root,ch.quality)}</div>
-        <div class="chord-card-beats">${ch.beats}拍</div>
-        <button class="chord-preview-btn" onclick="previewChord('${ch.root}','${ch.quality}',${ch.beats},${tempo})">▶ 試聴</button>
-      </div>`;
-    });
-    h+=`</div>`;
-  }
-
+  // score + inline editor
+  h+=buildScoreHtml(phrase,pid,true);
+  const ps=getPS(pid);
+  if(ps.nipOpen){h+=buildNipHtml(pid,ps);}
+  else{h+=`<button class="ghost-btn accent" onclick="openPlayerAddNote(${pid})" style="margin-bottom:14px">＋ 音符を追加</button>`;}
   el.innerHTML=h;
+}
+
+
+function buildNipHtml(pid,ps){
+  let h='';
+  h+=`<div class="note-input-panel open" id="pnip-${pid}">`;
+  h+=`<div class="nip-title">${ps.selIdx>=0?`✎ #${ps.selIdx+1} を編集`:`音符を追加`}</div>`;
+  h+=`<div class="nip-preview">${ps.note}${ps.octave}</div>`;
+  h+=`<div class="btn-grid-7">${NATURALS.map(n=>`<button class="nbtn${n===ps.note?' sel':''}" onclick="setPNote(${pid},'${n}')">${n}</button>`).join('')}</div>`;
+  h+=`<div class="btn-grid-5">${ACCS.map(n=>`<button class="nbtn acc${n===ps.note?' sel':''}" onclick="setPNote(${pid},'${n}')">${n}</button>`).join('')}</div>`;
+  h+=`<div class="btn-row"><span class="row-tag">オクターブ</span>${[3,4,5].map(o=>`<button class="qbtn${o===ps.octave?' sel':''}" onclick="setPOct(${pid},${o})">${o}</button>`).join('')}</div>`;
+  h+=`<div class="btn-row"><span class="row-tag">長さ</span>${DURS.map(d=>`<button class="qbtn${Math.abs(d.b-ps.dur)<.01?' sel':''}" onclick="setPDur(${pid},${d.b})">${noteSvg(d.b)}</button>`).join('')}</div>`;
+  h+=`<div class="nip-actions">`;
+  h+=`<button class="action-btn" onclick="previewPNote(${pid})">▶ 試聴</button>`;
+  h+=`<button class="action-btn ok" onclick="commitPNote(${pid})">${ps.selIdx>=0?'✓ 更新':'＋ 追加'}</button>`;
+  if(ps.selIdx>=0)h+=`<button class="action-btn del" onclick="deletePNote(${pid})">削除</button>`;
+  h+=`<button class="action-btn" onclick="closePNip(${pid})">閉じる</button>`;
+  h+=`</div></div>`;
+  return h;
+}
+
+// ── Player inline edit ────────────────────────────────────────────
+function selectPlayerNote(pid,i){
+  const ps=getPS(pid),p=getPhrase(pid);
+  if(ps.selIdx===i&&ps.nipOpen){ps.selIdx=-1;ps.nipOpen=false;}
+  else{ps.selIdx=i;ps.nipOpen=true;if(p.notes[i]){const n=p.notes[i];ps.note=n.name;ps.octave=n.octave;ps.dur=n.dur;}}
+  renderPlayer();
+  if(ps.nipOpen)setTimeout(()=>document.getElementById('pnip-'+pid)?.scrollIntoView({behavior:'smooth',block:'nearest'}),50);
+}
+function openPlayerAddNote(pid){
+  const ps=getPS(pid);ps.selIdx=-1;ps.nipOpen=true;renderPlayer();
+  setTimeout(()=>document.getElementById('pnip-'+pid)?.scrollIntoView({behavior:'smooth',block:'nearest'}),50);
+}
+function closePNip(pid){const ps=getPS(pid);ps.selIdx=-1;ps.nipOpen=false;renderPlayer();}
+function setPNote(pid,n){getPS(pid).note=n;previewPNote(pid);renderPlayer();}
+function setPOct(pid,o){getPS(pid).octave=o;previewPNote(pid);renderPlayer();}
+function setPDur(pid,d){getPS(pid).dur=d;renderPlayer();}
+function previewPNote(pid){const ps=getPS(pid),f=NF[ps.note+ps.octave];if(f)playTone(f,getCtx().currentTime,.35,.45);}
+function commitPNote(pid){
+  const ps=getPS(pid),p=getPhrase(pid);
+  const note={name:ps.note,octave:ps.octave,dur:ps.dur};
+  if(ps.selIdx>=0)p.notes[ps.selIdx]=note;
+  else p.notes.push(note);
+  ps.selIdx=-1;ps.nipOpen=false;save();renderPlayer();renderEditor();
+}
+function deletePNote(pid){
+  const ps=getPS(pid),p=getPhrase(pid);
+  if(ps.selIdx>=0)p.notes.splice(ps.selIdx,1);
+  ps.selIdx=-1;ps.nipOpen=false;save();renderPlayer();renderEditor();
 }
 
 // ── SCREEN 3: EDITOR ─────────────────────────────────────────
