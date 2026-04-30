@@ -696,6 +696,7 @@ function buildNipHtml(pid,ps){
   h+=`<div class="nip-actions">`;
   h+=`<button class="action-btn" onclick="previewPNote(${pid})">▶ 試聴</button>`;
   h+=`<button class="action-btn ok" onclick="commitPNote(${pid})">${ps.selIdx>=0?'✓ 更新':'＋ 追加'}</button>`;
+  if(ps.selIdx>=0)h+=`<button class="action-btn" onclick="insertAfterPNote(${pid})">後に挿入</button>`;
   if(ps.selIdx>=0)h+=`<button class="action-btn del" onclick="deletePNote(${pid})">削除</button>`;
   h+=`<button class="action-btn" onclick="closePNip(${pid})">閉じる</button>`;
   h+=`</div></div>`;
@@ -730,6 +731,22 @@ function deletePNote(pid){
   const ps=getPS(pid),p=getPhrase(pid);
   if(ps.selIdx>=0)p.notes.splice(ps.selIdx,1);
   ps.selIdx=-1;ps.nipOpen=false;save();renderPlayer();renderEditor();
+}
+function insertAfterPNote(pid){
+  const ps=getPS(pid),p=getPhrase(pid);
+  const idx=ps.selIdx+1;
+  p.notes.splice(idx,0,{name:ps.note,octave:ps.octave,dur:ps.dur,tie:false});
+  ps.selIdx=idx;ps.nipOpen=true;ps.tie=false;
+  save();renderPlayer();renderEditor();
+  setTimeout(()=>document.getElementById('pnip-'+pid)?.scrollIntoView({behavior:'smooth',block:'nearest'}),50);
+}
+function insertAfterPC(pid){
+  const ps=getPS(pid),p=getPhrase(pid);
+  const idx=ps.ceIdx+1;
+  p.chords.splice(idx,0,{root:ps.ceRoot,quality:ps.ceQuality,beats:ps.ceBeats});
+  ps.ceIdx=idx;ps.ceOpen=true;
+  save();renderPlayer();renderEditor();
+  setTimeout(()=>document.getElementById('pcip-'+pid)?.scrollIntoView({behavior:'smooth',block:'nearest'}),50);
 }
 
 // ── SCREEN 3: EDITOR ─────────────────────────────────────────
@@ -792,6 +809,7 @@ function renderEditor(){
       <div class="nip-actions">
         <button class="action-btn" onclick="previewENote(${pid})">▶ 試聴</button>
         <button class="action-btn ok" onclick="commitENote(${pid})">${es.selIdx>=0?'✓ 更新':'＋ 追加'}</button>
+        ${es.selIdx>=0?`<button class="action-btn" onclick="insertAfterENote(${pid})">後に挿入</button>`:''}
         ${es.selIdx>=0?`<button class="action-btn del" onclick="deleteENote(${pid})">削除</button>`:''}
         ${es.selIdx>=0?`<button class="action-btn" onclick="closeENotePanel(${pid})">閉じる</button>`:''}
       </div>
@@ -865,6 +883,7 @@ function renderEditor(){
       <div class="nip-actions">
         <button class="action-btn" onclick="previewChord('${es.ceRoot}','${es.ceQuality}',${es.ceBeats},${phrase.tempo||100})">▶ 試聴</button>
         <button class="action-btn ok" onclick="commitCIP(${pid})">${es.ceIdx>=0?'✓ 更新':'＋ 追加'}</button>
+        ${es.ceIdx>=0?`<button class="action-btn" onclick="insertAfterEC(${pid})">後に挿入</button>`:''}
         <button class="action-btn" onclick="closeCIP(${pid})">キャンセル</button>
       </div>
     </div>`;
@@ -917,6 +936,14 @@ function deleteENote(pid){
   if(es.selIdx>=0)p.notes.splice(es.selIdx,1);
   es.selIdx=-1; es.nipOpen=false; save(); renderEditor(); renderPlayer();
 }
+function insertAfterENote(pid){
+  const es=getES(pid),p=getPhrase(pid);
+  const idx=es.selIdx+1;
+  p.notes.splice(idx,0,{name:es.note,octave:es.octave,dur:es.dur,tie:false});
+  es.selIdx=idx;es.nipOpen=true;es.tie=false;
+  save();renderEditor();renderPlayer();
+  document.getElementById('nip-'+pid)?.scrollIntoView({behavior:'smooth',block:'nearest'});
+}
 
 
 function buildChordNipHtml(pid,ps){
@@ -933,6 +960,7 @@ function buildChordNipHtml(pid,ps){
   h+=`<div class="nip-actions">`;
   h+=`<button class="action-btn" onclick="previewChord(ps.ceRoot,ps.ceQuality,ps.ceBeats,getPhrase(${pid}).tempo||100)">▶ 試聴</button>`;
   h+=`<button class="action-btn ok" onclick="commitPC(${pid})">${isEdit?'✓ 更新':'＋ 追加'}</button>`;
+  if(isEdit)h+=`<button class="action-btn" onclick="insertAfterPC(${pid})">後に挿入</button>`;
   if(isEdit)h+=`<button class="action-btn del" onclick="deletePC(${pid})">削除</button>`;
   h+=`<button class="action-btn" onclick="closePCip(${pid})">閉じる</button>`;
   h+=`</div></div>`;
@@ -992,6 +1020,13 @@ function commitCIP(pid){
   es.ceOpen=false;es.ceIdx=-1;save();renderEditor();renderPlayer();
 }
 function rmChord(pid,ci){getPhrase(pid).chords.splice(ci,1);save();renderEditor();renderPlayer();}
+function insertAfterEC(pid){
+  const es=getES(pid),p=getPhrase(pid);
+  const idx=es.ceIdx+1;
+  p.chords.splice(idx,0,{root:es.ceRoot,quality:es.ceQuality,beats:es.ceBeats});
+  es.ceIdx=idx;es.ceOpen=true;
+  save();renderEditor();renderPlayer();
+}
 
 // MIDI
 function midiToNote(m){const nm=['C','Db','D','Eb','E','F','Gb','G','Ab','A','Bb','B'];return{name:nm[m%12],octave:Math.floor(m/12)-1};}
