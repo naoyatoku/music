@@ -556,6 +556,23 @@ function renderList(){
 
 // ── SCREEN 2: PLAYER ─────────────────────────────────────────
 const DURS=[{l:'全',b:4},{l:'付点2',b:3},{l:'2分',b:2},{l:'4分',b:1},{l:'8分',b:.5},{l:'16分',b:.25},{l:'付点4',b:1.5},{l:'付点8',b:.75}];
+function noteSvg(beats,opts){
+  const sm=opts&&opts.small;
+  const filled=beats<2;
+  const dotted=beats===3||beats===1.5||beats===0.75;
+  const flags=beats===0.25?2:(beats===0.5||beats===0.75?1:0);
+  const [nw,nh]=beats===4?(sm?[14,9]:[22,14]):(sm?[14,19]:[22,30]);
+  const vb=beats===4?'0 0 22 14':'0 0 22 30';
+  const st='display:inline-block;vertical-align:middle;pointer-events:none';
+  if(beats===4)return`<svg width="${nw}" height="${nh}" viewBox="${vb}" style="${st}"><ellipse cx="11" cy="7" rx="9" ry="5.5" fill="none" stroke="currentColor" stroke-width="2.2" transform="rotate(-8 11 7)"/></svg>`;
+  let c='';
+  c+=filled?`<ellipse cx="9" cy="24" rx="7" ry="4.5" transform="rotate(-20 9 24)" fill="currentColor"/>`:`<ellipse cx="9" cy="24" rx="7" ry="4.5" transform="rotate(-20 9 24)" fill="none" stroke="currentColor" stroke-width="1.8"/>`;
+  c+=`<line x1="15.5" y1="21" x2="15.5" y2="3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>`;
+  if(flags>=1)c+=`<path d="M15.5,3 C22,7 22,16 15.5,19" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>`;
+  if(flags>=2)c+=`<path d="M15.5,9 C22,13 22,22 15.5,25" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>`;
+  if(dotted)c+=`<circle cx="19" cy="23" r="2" fill="currentColor"/>`;
+  return`<svg width="${nw}" height="${nh}" viewBox="${vb}" style="${st}">${c}</svg>`;
+}
 
 function renderPlayer(){
   const el=document.getElementById('screen-player');
@@ -591,10 +608,9 @@ function renderPlayer(){
   } else {
     let ba=0;
     phrase.notes.forEach((n,i)=>{
-      const dl=DURS.find(d=>Math.abs(d.b-n.dur)<.01)?.l||n.dur;
       if(i>0&&Math.abs(ba%bpb)<.01)
         h+=`<div class="bar-div"><span class="bar-num">${Math.round(ba/bpb)+1}</span></div>`;
-      h+=`<div class="sn" id="sn-${i}"><div class="sn-name">${n.name}${n.octave}</div><div class="sn-dur">${dl}</div></div>`;
+      h+=`<div class="sn" id="sn-${i}"><div class="sn-name">${n.name}${n.octave}</div><div class="sn-dur">${noteSvg(n.dur,{small:true})}</div></div>`;
       ba+=n.dur;
     });
   }
@@ -668,7 +684,7 @@ function renderEditor(){
         ${[3,4,5].map(o=>`<button class="qbtn${o===es.octave?' sel':''}" onclick="setEOct(${pid},${o})">${o}</button>`).join('')}
       </div>
       <div class="btn-row"><span class="row-tag">長さ</span>
-        ${DURS.map(d=>`<button class="qbtn${Math.abs(d.b-es.dur)<.01?' sel':''}" onclick="setEDur(${pid},${d.b})">${d.l}</button>`).join('')}
+        ${DURS.map(d=>`<button class="qbtn${Math.abs(d.b-es.dur)<.01?' sel':''}" onclick="setEDur(${pid},${d.b})">${noteSvg(d.b)}</button>`).join('')}
       </div>
       <div class="nip-actions">
         <button class="action-btn" onclick="previewENote(${pid})">▶ 試聴</button>
@@ -683,13 +699,12 @@ function renderEditor(){
       h+=`<div class="edit-note-list">`;
       const bpb=phrase.beatsPerBar||4; let ba=0;
       phrase.notes.forEach((n,i)=>{
-        const dl=DURS.find(d=>Math.abs(d.b-n.dur)<.01)?.l||n.dur;
         if(i>0&&Math.abs(ba%bpb)<.01)
           h+=`<div style="font-size:.6rem;color:var(--accent);padding:2px 0;letter-spacing:.06em">── 小節 ${Math.round(ba/bpb)+1} ──</div>`;
         h+=`<div class="edit-note-row${es.selIdx===i?' selected':''}" onclick="selectENote(${pid},${i})">
           <span class="edit-note-num">${i+1}</span>
           <span class="edit-note-name">${n.name}${n.octave}</span>
-          <span class="edit-note-dur-label">${dl}</span>
+          <span class="edit-note-dur-label">${noteSvg(n.dur,{small:true})}</span>
         </div>`;
         ba+=n.dur;
       });
