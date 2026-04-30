@@ -555,7 +555,7 @@ function renderList(){
 }
 
 // ── SCREEN 2: PLAYER ─────────────────────────────────────────
-const DURS=[{l:'全',b:4},{l:'2分',b:2},{l:'4分',b:1},{l:'8分',b:.5},{l:'16分',b:.25},{l:'付点4',b:1.5},{l:'付点8',b:.75}];
+const DURS=[{l:'全',b:4},{l:'付点2',b:3},{l:'2分',b:2},{l:'4分',b:1},{l:'8分',b:.5},{l:'16分',b:.25},{l:'付点4',b:1.5},{l:'付点8',b:.75}];
 
 function renderPlayer(){
   const el=document.getElementById('screen-player');
@@ -626,6 +626,7 @@ function getES(pid){
   if(!ES[pid])ES[pid]={
     tab:'notes', // 'notes' | 'chords' | 'midi'
     selIdx:-1,
+    nipOpen:false,
     note:'C',octave:4,dur:.5,
     ceOpen:false,ceIdx:-1,ceRoot:'C',ceQuality:'7',ceBeats:4,
   };
@@ -658,7 +659,7 @@ function renderEditor(){
   // ── NOTES TAB
   if(es.tab==='notes'){
     // note input panel
-    h+=`<div class="note-input-panel${es.selIdx>=0?' open':''}" id="nip-${pid}">
+    h+=`<div class="note-input-panel${(es.selIdx>=0||es.nipOpen)?' open':''}" id="nip-${pid}">
       <div class="nip-title">${es.selIdx>=0?`✎ #${es.selIdx+1} を編集`:'音符を追加'}</div>
       <div class="nip-preview">${es.note}${es.octave}</div>
       <div class="btn-grid-7">${NATURALS.map(n=>`<button class="nbtn${n===es.note?' sel':''}" onclick="setENote(${pid},'${n}')">${n}</button>`).join('')}</div>
@@ -772,16 +773,16 @@ function renderEditor(){
 // ── Editor actions ────────────────────────────────────────────
 function setETab(pid,tab){ getES(pid).tab=tab; renderEditor(); }
 
-function openAddNote(pid){ const es=getES(pid); es.selIdx=-1; renderEditor(); document.getElementById('nip-'+pid)?.scrollIntoView({behavior:'smooth',block:'nearest'}); }
+function openAddNote(pid){ const es=getES(pid); es.selIdx=-1; es.nipOpen=true; renderEditor(); document.getElementById('nip-'+pid)?.scrollIntoView({behavior:'smooth',block:'nearest'}); }
 function selectENote(pid,i){
   const es=getES(pid), p=getPhrase(pid);
   if(es.selIdx===i){ closeENotePanel(pid); return; }
-  es.selIdx=i;
+  es.selIdx=i; es.nipOpen=true;
   if(p.notes[i]){const n=p.notes[i];es.note=n.name;es.octave=n.octave;es.dur=n.dur;}
   renderEditor();
   document.getElementById('nip-'+pid)?.scrollIntoView({behavior:'smooth',block:'nearest'});
 }
-function closeENotePanel(pid){ getES(pid).selIdx=-1; renderEditor(); }
+function closeENotePanel(pid){ const es=getES(pid); es.selIdx=-1; es.nipOpen=false; renderEditor(); }
 function setENote(pid,n){ getES(pid).note=n; previewENote(pid); renderEditor(); }
 function setEOct(pid,o){ getES(pid).octave=o; previewENote(pid); renderEditor(); }
 function setEDur(pid,d){ getES(pid).dur=d; renderEditor(); }
@@ -791,12 +792,12 @@ function commitENote(pid){
   const note={name:es.note,octave:es.octave,dur:es.dur};
   if(es.selIdx>=0) p.notes[es.selIdx]=note;
   else p.notes.push(note);
-  es.selIdx=-1; save(); renderEditor(); renderPlayer();
+  es.selIdx=-1; es.nipOpen=false; save(); renderEditor(); renderPlayer();
 }
 function deleteENote(pid){
   const es=getES(pid),p=getPhrase(pid);
   if(es.selIdx>=0)p.notes.splice(es.selIdx,1);
-  es.selIdx=-1; save(); renderEditor(); renderPlayer();
+  es.selIdx=-1; es.nipOpen=false; save(); renderEditor(); renderPlayer();
 }
 
 // chord actions
