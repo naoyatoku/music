@@ -1,0 +1,919 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Jazz Phrase Book</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700&family=IBM+Plex+Mono:wght@300;400;500&display=swap');
+
+:root {
+  --bg: #0f0e0c;
+  --surface: #1a1814;
+  --surface2: #222018;
+  --surface3: #2a2620;
+  --accent: #c8a84b;
+  --accent2: #e8c96b;
+  --text: #e8e0d0;
+  --dim: #7a7060;
+  --border: #2e2a22;
+  --red: #c85050;
+  --green: #5a9a6a;
+  --tabbar: 60px;
+  --topbar: 52px;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+body {
+  background: var(--bg); color: var(--text);
+  font-family: 'IBM Plex Mono', monospace;
+  height: 100dvh; overflow: hidden;
+  display: flex; flex-direction: column;
+}
+
+/* ── TOP BAR ── */
+.topbar {
+  height: var(--topbar); flex-shrink: 0;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 16px; border-bottom: 1px solid var(--border);
+  background: var(--bg);
+}
+.topbar-left { display: flex; align-items: center; gap: 10px; }
+.back-btn {
+  display: none; align-items: center; justify-content: center;
+  width: 32px; height: 32px; background: none; border: none;
+  color: var(--accent); font-size: 1.2rem; cursor: pointer; padding: 0;
+}
+.back-btn.visible { display: flex; }
+.topbar-title {
+  font-family: 'Playfair Display', serif;
+  font-size: 1rem; color: var(--accent);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 180px;
+}
+.topbar-right { display: flex; gap: 8px; }
+.tbbtn {
+  padding: 6px 12px; border-radius: 3px; border: 1px solid var(--border);
+  background: none; color: var(--dim); font-family: inherit; font-size: .68rem;
+  cursor: pointer; transition: all .15s; white-space: nowrap;
+}
+.tbbtn.primary { border-color: var(--accent); color: var(--accent); }
+
+/* ── SCREEN CONTAINER ── */
+.screens {
+  flex: 1; overflow: hidden; position: relative;
+}
+.screen {
+  position: absolute; inset: 0;
+  overflow-y: auto; padding: 16px 16px 24px;
+  transition: transform .3s cubic-bezier(.4,0,.2,1), opacity .3s;
+  will-change: transform;
+}
+.screen.hidden-left  { transform: translateX(-100%); opacity: 0; pointer-events: none; }
+.screen.hidden-right { transform: translateX(100%);  opacity: 0; pointer-events: none; }
+.screen.active       { transform: translateX(0);     opacity: 1; }
+
+/* ── BOTTOM TAB BAR ── */
+.tabbar {
+  height: var(--tabbar); flex-shrink: 0;
+  display: flex; border-top: 1px solid var(--border); background: var(--bg);
+}
+.tab-item {
+  flex: 1; display: flex; flex-direction: column; align-items: center;
+  justify-content: center; gap: 4px; cursor: pointer;
+  color: var(--dim); transition: color .15s; border: none; background: none;
+  font-family: inherit;
+}
+.tab-item.active { color: var(--accent); }
+.tab-icon { font-size: 1.2rem; line-height: 1; }
+.tab-label { font-size: .58rem; letter-spacing: .06em; }
+
+/* ══════════════════════════════════════
+   SCREEN 1 — PHRASE LIST
+══════════════════════════════════════ */
+.chapter-block { margin-bottom: 8px; }
+.chapter-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 12px 14px; background: var(--surface);
+  border: 1px solid var(--border); border-radius: 6px;
+  cursor: pointer; margin-bottom: 4px;
+}
+.chapter-arrow { font-size: .7rem; color: var(--dim); transition: transform .2s; }
+.chapter-arrow.open { transform: rotate(90deg); }
+.chapter-title {
+  flex: 1; font-size: .8rem; color: var(--text);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.chapter-edit { font-size: .75rem; color: var(--dim); padding: 4px 6px; cursor: pointer; }
+.chapter-edit:active { color: var(--accent); }
+
+.phrase-items { padding: 0 0 4px 12px; }
+.phrase-row {
+  display: flex; align-items: center;
+  padding: 11px 14px; background: var(--surface2);
+  border: 1px solid var(--border); border-radius: 5px;
+  margin-bottom: 4px; cursor: pointer; transition: all .15s;
+}
+.phrase-row:active, .phrase-row.active { background: var(--surface3); border-color: var(--accent); }
+.phrase-row-name { flex: 1; font-size: .78rem; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.phrase-row-sub { font-size: .62rem; color: var(--dim); margin-top: 2px; }
+.phrase-chevron { color: var(--dim); font-size: .8rem; margin-left: 8px; }
+
+.add-phrase-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 9px 14px; color: var(--dim); cursor: pointer;
+  font-size: .72rem; border-radius: 5px; margin-bottom: 4px;
+  border: 1px dashed var(--border);
+}
+.add-phrase-row:active { color: var(--accent); border-color: var(--accent); }
+
+.add-chapter-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 12px 14px; color: var(--dim); cursor: pointer;
+  font-size: .72rem; border: 1px dashed var(--border); border-radius: 6px;
+  margin-top: 8px;
+}
+.add-chapter-row:active { color: var(--accent); border-color: var(--accent); }
+
+/* ══════════════════════════════════════
+   SCREEN 2 — PLAYER
+══════════════════════════════════════ */
+.player-phrase-title {
+  font-family: 'Playfair Display', serif;
+  font-size: 1.15rem; color: var(--text); margin-bottom: 4px;
+}
+.player-phrase-sub { font-size: .7rem; color: var(--dim); margin-bottom: 20px; }
+
+.play-controls {
+  display: flex; gap: 10px; align-items: center; margin-bottom: 16px; flex-wrap: wrap;
+}
+.big-play-btn {
+  padding: 14px 32px; background: var(--accent); border: none; border-radius: 6px;
+  color: var(--bg); font-family: inherit; font-size: .9rem; font-weight: 500;
+  cursor: pointer; transition: all .15s;
+}
+.big-play-btn:active { background: var(--accent2); }
+.big-play-btn:disabled { opacity: .35; }
+.big-stop-btn {
+  padding: 14px 20px; background: none; border: 1px solid var(--border);
+  border-radius: 6px; color: var(--dim); font-family: inherit; font-size: .9rem; cursor: pointer;
+}
+.big-stop-btn:active { border-color: var(--red); color: var(--red); }
+
+.tempo-block {
+  display: flex; align-items: center; gap: 10px; font-size: .72rem; color: var(--dim);
+  background: var(--surface); border: 1px solid var(--border); border-radius: 6px;
+  padding: 12px 14px; margin-bottom: 16px;
+}
+.tempo-block input[type=range] {
+  -webkit-appearance: none; flex: 1; height: 3px; background: var(--border); outline: none; border-radius: 2px;
+}
+.tempo-block input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 18px; height: 18px; background: var(--accent); border-radius: 50%; cursor: pointer;
+}
+.tempo-val { color: var(--accent); min-width: 36px; font-size: .85rem; }
+
+.progress-bar { height: 3px; background: var(--border); border-radius: 2px; overflow: hidden; margin-bottom: 20px; }
+.progress-fill { height: 100%; background: var(--accent); width: 0%; transition: width .05s linear; }
+
+/* note strip */
+.note-strip-wrap { overflow-x: auto; margin-bottom: 20px; padding-bottom: 8px; }
+.note-strip {
+  display: flex; gap: 5px; align-items: center;
+  min-height: 64px; padding: 8px;
+  background: var(--surface2); border: 1px solid var(--border); border-radius: 6px;
+  width: max-content; min-width: 100%;
+}
+.sn {
+  display: flex; flex-direction: column; align-items: center;
+  background: var(--surface3); border: 1px solid var(--border);
+  border-radius: 4px; padding: 6px 9px; min-width: 42px;
+  transition: all .1s;
+}
+.sn.playing { border-color: var(--accent); background: rgba(200,168,75,.18); }
+.sn-name { font-size: .82rem; color: var(--text); font-weight: 500; }
+.sn-dur  { font-size: .56rem; color: var(--dim); margin-top: 2px; }
+.bar-div {
+  width: 2px; min-height: 52px; background: var(--accent); opacity: .5;
+  border-radius: 1px; flex-shrink: 0; position: relative; margin: 0 3px;
+}
+.bar-num { position: absolute; top: -16px; left: 50%; transform: translateX(-50%); font-size: .55rem; color: var(--accent); white-space: nowrap; }
+
+/* chord cards */
+.chord-cards { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
+.chord-card {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 6px;
+  padding: 12px 14px; display: flex; align-items: center; gap: 10px;
+}
+.chord-card-name { font-family: 'Playfair Display', serif; font-size: 1.1rem; color: var(--accent2); flex: 1; }
+.chord-card-beats { font-size: .7rem; color: var(--dim); }
+.chord-preview-btn {
+  padding: 8px 14px; border: 1px solid var(--green); border-radius: 4px;
+  color: var(--green); background: none; font-family: inherit; font-size: .75rem; cursor: pointer;
+}
+.chord-preview-btn:active { background: var(--green); color: var(--bg); }
+
+.sec-label { font-size: .6rem; color: var(--dim); letter-spacing: .1em; text-transform: uppercase; margin-bottom: 10px; }
+
+/* ══════════════════════════════════════
+   SCREEN 3 — EDITOR
+══════════════════════════════════════ */
+.editor-tabs {
+  display: flex; gap: 0; border-bottom: 1px solid var(--border); margin-bottom: 16px;
+}
+.etab {
+  flex: 1; padding: 10px; text-align: center; font-size: .72rem; color: var(--dim);
+  cursor: pointer; border-bottom: 2px solid transparent; transition: all .15s;
+}
+.etab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+/* note list in editor */
+.edit-note-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+.edit-note-row {
+  display: flex; align-items: center; gap: 10px;
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 5px; padding: 10px 12px; cursor: pointer; transition: all .15s;
+}
+.edit-note-row.selected { border-color: var(--accent2); background: rgba(232,201,107,.1); }
+.edit-note-num { font-size: .62rem; color: var(--dim); min-width: 22px; }
+.edit-note-name { font-size: .9rem; color: var(--text); font-weight: 500; flex: 1; }
+.edit-note-dur-label { font-size: .68rem; color: var(--dim); }
+
+/* note input panel */
+.note-input-panel {
+  background: var(--surface); border: 1px solid var(--accent2);
+  border-radius: 6px; padding: 14px; margin-bottom: 14px; display: none;
+}
+.note-input-panel.open { display: block; }
+.nip-title { font-size: .6rem; color: var(--accent2); letter-spacing: .1em; text-transform: uppercase; margin-bottom: 10px; }
+.nip-preview {
+  font-family: 'Playfair Display', serif; font-size: 1.6rem;
+  color: var(--accent2); text-align: center; margin-bottom: 12px;
+}
+
+.btn-grid-7 { display: grid; grid-template-columns: repeat(7,1fr); gap: 5px; margin-bottom: 6px; }
+.btn-grid-5 { display: grid; grid-template-columns: repeat(5,1fr); gap: 5px; margin-bottom: 12px; }
+.btn-row    { display: flex; gap: 5px; flex-wrap: wrap; margin-bottom: 10px; align-items: center; }
+.row-tag    { font-size: .6rem; color: var(--dim); letter-spacing: .06em; white-space: nowrap; margin-right: 2px; }
+
+.nbtn {
+  padding: 11px 4px; background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 4px; color: var(--text); font-family: inherit; font-size: .82rem;
+  cursor: pointer; text-align: center; transition: all .1s;
+}
+.nbtn.acc { color: var(--accent); border-color: rgba(200,168,75,.3); }
+.nbtn:active, .nbtn.sel { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+
+.qbtn {
+  padding: 10px 12px; background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 4px; color: var(--text); font-family: inherit; font-size: .75rem;
+  cursor: pointer; white-space: nowrap; transition: all .1s;
+}
+.qbtn:active, .qbtn.sel { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+
+.nip-actions { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+.action-btn {
+  flex: 1; padding: 12px; border-radius: 5px; font-family: inherit; font-size: .78rem;
+  cursor: pointer; border: 1px solid var(--border); background: none; color: var(--dim); transition: all .15s;
+}
+.action-btn.ok  { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+.action-btn.del { border-color: var(--red); color: var(--red); }
+.action-btn:active { opacity: .7; }
+
+/* midi paste */
+.midi-area textarea {
+  width: 100%; background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 5px; color: var(--text); font-family: inherit; font-size: .78rem;
+  padding: 10px; outline: none; resize: vertical; line-height: 1.7; min-height: 80px;
+}
+.midi-area textarea:focus { border-color: var(--accent); }
+.midi-msg { font-size: .65rem; color: var(--accent); margin-top: 6px; min-height: 18px; }
+
+/* chord editor in editor tab */
+.chord-editor-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+.chord-edit-row {
+  background: var(--surface2); border: 1px solid var(--border); border-radius: 5px;
+  padding: 10px 12px; display: flex; align-items: center; gap: 8px;
+}
+.chord-edit-name { font-family: 'Playfair Display', serif; font-size: 1rem; color: var(--accent2); flex: 1; }
+.chord-edit-beats { font-size: .68rem; color: var(--dim); }
+.icon-btn {
+  padding: 6px 10px; border: 1px solid var(--border); border-radius: 3px;
+  background: none; color: var(--dim); font-family: inherit; font-size: .68rem; cursor: pointer;
+}
+.icon-btn.g { border-color: var(--green); color: var(--green); }
+.icon-btn.r:active { border-color: var(--red); color: var(--red); }
+
+.chord-input-panel {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 6px; padding: 14px; margin-bottom: 12px; display: none;
+}
+.chord-input-panel.open { display: block; }
+.cip-preview { font-family: 'Playfair Display', serif; font-size: 1.3rem; color: var(--accent2); text-align: center; margin-bottom: 12px; }
+
+/* ghost btn */
+.ghost-btn {
+  padding: 11px; background: none; border: 1px dashed var(--border);
+  border-radius: 5px; color: var(--dim); font-family: inherit; font-size: .75rem;
+  cursor: pointer; width: 100%; transition: all .15s; text-align: center;
+}
+.ghost-btn:active { border-color: var(--accent); color: var(--accent); }
+.ghost-btn.accent { border-color: var(--accent); color: var(--accent); }
+
+.divider { border: none; border-top: 1px solid var(--border); margin: 14px 0; }
+.hint { font-size: .62rem; color: var(--dim); line-height: 1.7; margin-bottom: 8px; }
+
+.del-phrase-btn {
+  margin-top: 8px; width: 100%; padding: 11px; background: none;
+  border: 1px solid var(--border); border-radius: 5px; color: var(--dim);
+  font-family: inherit; font-size: .72rem; cursor: pointer;
+}
+.del-phrase-btn:active { border-color: var(--red); color: var(--red); }
+
+/* modal */
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.75); display: none; align-items: center; justify-content: center; z-index: 300; padding: 20px; }
+.modal-overlay.open { display: flex; }
+.modal { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 24px; width: 100%; max-width: 320px; }
+.modal h3 { font-family: 'Playfair Display', serif; color: var(--accent); margin-bottom: 16px; font-size: 1rem; }
+.modal input { width: 100%; background: var(--surface2); border: 1px solid var(--border); color: var(--text); font-family: inherit; font-size: .9rem; padding: 10px 12px; border-radius: 5px; outline: none; margin-bottom: 14px; }
+.modal input:focus { border-color: var(--accent); }
+.modal-btns { display: flex; gap: 8px; }
+.modal-btns button { flex: 1; padding: 10px; border-radius: 5px; font-family: inherit; font-size: .8rem; cursor: pointer; border: 1px solid var(--border); background: none; color: var(--dim); }
+.modal-btns .ok { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+</style>
+</head>
+<body>
+
+<!-- Top bar -->
+<div class="topbar">
+  <div class="topbar-left">
+    <button class="back-btn" id="back-btn" onclick="goBack()">‹</button>
+    <div class="topbar-title" id="topbar-title">Jazz Phrase Book</div>
+  </div>
+  <div class="topbar-right">
+    <button class="tbbtn primary" onclick="exportData()">⬇</button>
+    <label class="tbbtn" style="cursor:pointer">⬆<input type="file" accept=".json" style="display:none" onchange="importData(event)"></label>
+  </div>
+</div>
+
+<!-- Screens -->
+<div class="screens">
+  <div class="screen active" id="screen-list"></div>
+  <div class="screen hidden-right" id="screen-player"></div>
+  <div class="screen hidden-right" id="screen-editor"></div>
+</div>
+
+<!-- Tab bar -->
+<div class="tabbar" id="tabbar">
+  <button class="tab-item active" id="tab-list" onclick="showScreen('list')">
+    <span class="tab-icon">☰</span>
+    <span class="tab-label">一覧</span>
+  </button>
+  <button class="tab-item" id="tab-player" onclick="showScreen('player')">
+    <span class="tab-icon">▶</span>
+    <span class="tab-label">再生</span>
+  </button>
+  <button class="tab-item" id="tab-editor" onclick="showScreen('editor')">
+    <span class="tab-icon">✎</span>
+    <span class="tab-label">編集</span>
+  </button>
+</div>
+
+<!-- Modal -->
+<div class="modal-overlay" id="modal">
+  <div class="modal">
+    <h3 id="modal-title">入力</h3>
+    <input type="text" id="modal-input">
+    <div class="modal-btns">
+      <button onclick="closeModal()">キャンセル</button>
+      <button class="ok" onclick="modalOk()">OK</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Audio ──────────────────────────────────────────────────────
+const AC = window.AudioContext || window.webkitAudioContext;
+let ctx = null;
+function getCtx() { if(!ctx)ctx=new AC(); if(ctx.state==='suspended')ctx.resume(); return ctx; }
+const CHROMATIC = ['C','Db','D','Eb','E','F','Gb','G','Ab','A','Bb','B'];
+const NF = {};
+CHROMATIC.forEach((n,i)=>{ for(let o=1;o<=7;o++) NF[n+o]=440*Math.pow(2,(i+(o-4)*12-9)/12); });
+function playTone(freq,t0,dur,gain=.45,type='sawtooth'){
+  const ac=getCtx(),osc=ac.createOscillator(),g=ac.createGain();
+  osc.connect(g);g.connect(ac.destination);
+  osc.type=type;osc.frequency.value=freq;
+  g.gain.setValueAtTime(0,t0);g.gain.linearRampToValueAtTime(gain,t0+.02);
+  g.gain.setValueAtTime(gain,t0+dur*.75);g.gain.linearRampToValueAtTime(0,t0+dur);
+  osc.start(t0);osc.stop(t0+dur+.05);
+}
+const QUALITIES=[
+  {key:'maj',label:'Major',iv:[0,4,7]},{key:'min',label:'minor',iv:[0,3,7]},
+  {key:'7',label:'7th',iv:[0,4,7,10]},{key:'maj7',label:'maj7',iv:[0,4,7,11]},
+  {key:'m7',label:'m7',iv:[0,3,7,10]},{key:'dim',label:'dim7',iv:[0,3,6,9]},
+  {key:'half',label:'ø (m7♭5)',iv:[0,3,6,10]},{key:'aug',label:'aug',iv:[0,4,8]},
+  {key:'sus4',label:'sus4',iv:[0,5,7]},{key:'7sus4',label:'7sus4',iv:[0,5,7,10]},
+];
+function chordName(root,qkey){
+  const L={maj:'',min:'m','7':'7',maj7:'△7',m7:'m7',dim:'dim7',half:'ø',aug:'+',sus4:'sus4','7sus4':'7sus4'};
+  return root+(L[qkey]??qkey);
+}
+function chordFreqs(root,qkey,oct=3){
+  const ri=CHROMATIC.indexOf(root),q=QUALITIES.find(q=>q.key===qkey);
+  if(!q||ri<0)return[];
+  return q.iv.map(iv=>{ const ni=(ri+iv)%12,o=oct+Math.floor((ri+iv)/12); return NF[CHROMATIC[ni]+o]; }).filter(Boolean);
+}
+function previewChord(root,qkey,beats,tempo){
+  const ac=getCtx(),bs=60/(tempo||100);
+  chordFreqs(root,qkey,3).forEach(f=>playTone(f,ac.currentTime,beats*bs*.9,.15,'triangle'));
+}
+
+// ── Data ──────────────────────────────────────────────────────
+function mkId(){ return Date.now()+Math.floor(Math.random()*9999); }
+let db = JSON.parse(localStorage.getItem('jpb3')||'null') || {
+  chapters:[{
+    id:1,title:'Chapter 1 — インターバル',open:true,
+    phrases:[{id:2,title:'上行形の短２度',sub:'Blue Monk',notes:[],
+      chords:[{root:'Bb',quality:'7',beats:4}],tempo:100,beatsPerBar:4}]
+  }]
+};
+function save(){ localStorage.setItem('jpb3',JSON.stringify(db)); }
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
+function getPhrase(pid){ for(const ch of db.chapters) for(const p of ch.phrases) if(p.id===pid)return p; return null; }
+function getChapter(cid){ return db.chapters.find(c=>c.id===cid); }
+
+let activePhraseId = db.chapters[0]?.phrases[0]?.id ?? null;
+let timers = [];
+
+// ── Screen nav ────────────────────────────────────────────────
+let currentScreen = 'list';
+const SCREENS = ['list','player','editor'];
+
+function showScreen(name){
+  const order = {list:0,player:1,editor:2};
+  const cur = order[currentScreen], next = order[name];
+  SCREENS.forEach(s=>{
+    const el=document.getElementById('screen-'+s);
+    const idx=order[s];
+    if(s===name){ el.className='screen active'; }
+    else if(idx<next){ el.className='screen hidden-left'; }
+    else { el.className='screen hidden-right'; }
+  });
+  document.querySelectorAll('.tab-item').forEach(t=>t.classList.remove('active'));
+  document.getElementById('tab-'+name)?.classList.add('active');
+  const backBtn=document.getElementById('back-btn');
+  backBtn.className = (name!=='list') ? 'back-btn visible' : 'back-btn';
+  currentScreen=name;
+  updateTopbarTitle();
+}
+
+function goBack(){ showScreen('list'); }
+
+function updateTopbarTitle(){
+  const el=document.getElementById('topbar-title');
+  if(currentScreen==='list'){ el.textContent='Jazz Phrase Book'; return; }
+  const p=getPhrase(activePhraseId);
+  el.textContent = p ? (p.title||'無題') : 'Jazz Phrase Book';
+}
+
+function selectPhrase(pid){
+  activePhraseId=pid;
+  renderPlayer(); renderEditor();
+  showScreen('player');
+}
+
+// ── Stop ──────────────────────────────────────────────────────
+function stopAll(){
+  timers.forEach(clearTimeout);timers=[];
+  document.querySelectorAll('.sn').forEach(el=>el.classList.remove('playing'));
+  document.querySelectorAll('.progress-fill').forEach(el=>el.style.width='0%');
+  const btn=document.getElementById('big-play-btn');
+  if(btn){btn.disabled=false;btn.textContent='▶ 再生';}
+}
+
+// ── Play ──────────────────────────────────────────────────────
+function playPhrase(){
+  stopAll();
+  const phrase=getPhrase(activePhraseId);
+  if(!phrase||!phrase.notes.length)return;
+  const ac=getCtx(),bs=60/(phrase.tempo||100);
+  const btn=document.getElementById('big-play-btn');
+  if(btn){btn.disabled=true;btn.textContent='♪ 再生中...';}
+  let cb=0;
+  (phrase.chords||[]).forEach(ch=>{
+    chordFreqs(ch.root,ch.quality,3).forEach(f=>playTone(f,ac.currentTime+cb*bs,ch.beats*bs*.9,.13,'triangle'));
+    cb+=ch.beats;
+  });
+  let beat=0;
+  const total=phrase.notes.reduce((s,n)=>s+n.dur,0);
+  phrase.notes.forEach((n,i)=>{
+    const t0=ac.currentTime+beat*bs;
+    const f=NF[n.name+n.octave];
+    if(f)playTone(f,t0,n.dur*bs*.88,.45);
+    const tb=beat;
+    timers.push(setTimeout(()=>{
+      document.querySelectorAll('.sn').forEach(el=>el.classList.remove('playing'));
+      document.getElementById('sn-'+i)?.classList.add('playing');
+      const pb=document.getElementById('progress-fill');
+      if(pb)pb.style.width=(tb/total*100)+'%';
+    },beat*bs*1000));
+    beat+=n.dur;
+  });
+  timers.push(setTimeout(()=>stopAll(),total*bs*1000+400));
+}
+
+// ── SCREEN 1: LIST ────────────────────────────────────────────
+function renderList(){
+  const el=document.getElementById('screen-list');
+  let h='';
+  db.chapters.forEach(ch=>{
+    const isOpen=ch.open!==false;
+    h+=`<div class="chapter-block">
+      <div class="chapter-row" onclick="toggleChapter(${ch.id})">
+        <span class="chapter-arrow${isOpen?' open':''}">▶</span>
+        <span class="chapter-title">${esc(ch.title)}</span>
+        <span class="chapter-edit" onclick="event.stopPropagation();renameChapter(${ch.id})">✎</span>
+      </div>`;
+    if(isOpen){
+      h+=`<div class="phrase-items">`;
+      ch.phrases.forEach(p=>{
+        h+=`<div class="phrase-row${p.id===activePhraseId?' active':''}" onclick="selectPhrase(${p.id})">
+          <div>
+            <div class="phrase-row-name">${esc(p.title||'無題')}</div>
+            ${p.sub?`<div class="phrase-row-sub">${esc(p.sub)}</div>`:''}
+          </div>
+          <span class="phrase-chevron">›</span>
+        </div>`;
+      });
+      h+=`<div class="add-phrase-row" onclick="addPhrase(${ch.id})">＋ フレーズを追加</div>`;
+      h+=`</div>`;
+    }
+    h+=`</div>`;
+  });
+  h+=`<div class="add-chapter-row" onclick="addChapter()">＋ Chapter を追加</div>`;
+  el.innerHTML=h;
+}
+
+// ── SCREEN 2: PLAYER ─────────────────────────────────────────
+const DURS=[{l:'全',b:4},{l:'2分',b:2},{l:'4分',b:1},{l:'8分',b:.5},{l:'16分',b:.25},{l:'付点4',b:1.5},{l:'付点8',b:.75}];
+
+function renderPlayer(){
+  const el=document.getElementById('screen-player');
+  const phrase=getPhrase(activePhraseId);
+  if(!phrase){el.innerHTML=`<div style="padding:40px;text-align:center;color:var(--dim)">左の一覧からフレーズを選んでください</div>`;return;}
+  const pid=phrase.id, tempo=phrase.tempo||100, bpb=phrase.beatsPerBar||4;
+
+  let h=`<div class="player-phrase-title">${esc(phrase.title||'無題')}</div>`;
+  if(phrase.sub)h+=`<div class="player-phrase-sub">${esc(phrase.sub)}</div>`;
+
+  // controls
+  h+=`<div class="play-controls">
+    <button class="big-play-btn" id="big-play-btn" onclick="playPhrase()" ${!phrase.notes.length?'disabled':''}>▶ 再生</button>
+    <button class="big-stop-btn" onclick="stopAll()">■ 停止</button>
+  </div>`;
+
+  // tempo
+  h+=`<div class="tempo-block">
+    <span>BPM</span>
+    <input type="range" min="40" max="220" value="${tempo}"
+      oninput="getPhrase(${pid}).tempo=parseInt(this.value);save();document.getElementById('tv').textContent=this.value">
+    <span class="tempo-val" id="tv">${tempo}</span>
+  </div>`;
+
+  // progress
+  h+=`<div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>`;
+
+  // note strip
+  h+=`<div class="sec-label">メロディ</div>
+  <div class="note-strip-wrap"><div class="note-strip">`;
+  if(!phrase.notes.length){
+    h+=`<span style="font-size:.72rem;color:var(--dim);font-style:italic;padding:8px">音符がありません</span>`;
+  } else {
+    let ba=0;
+    phrase.notes.forEach((n,i)=>{
+      const dl=DURS.find(d=>Math.abs(d.b-n.dur)<.01)?.l||n.dur;
+      if(i>0&&Math.abs(ba%bpb)<.01)
+        h+=`<div class="bar-div"><span class="bar-num">${Math.round(ba/bpb)+1}</span></div>`;
+      h+=`<div class="sn" id="sn-${i}"><div class="sn-name">${n.name}${n.octave}</div><div class="sn-dur">${dl}</div></div>`;
+      ba+=n.dur;
+    });
+  }
+  h+=`</div></div>`;
+
+  // chords
+  if(phrase.chords?.length){
+    h+=`<div class="sec-label">コード進行</div><div class="chord-cards">`;
+    phrase.chords.forEach(ch=>{
+      h+=`<div class="chord-card">
+        <div class="chord-card-name">${chordName(ch.root,ch.quality)}</div>
+        <div class="chord-card-beats">${ch.beats}拍</div>
+        <button class="chord-preview-btn" onclick="previewChord('${ch.root}','${ch.quality}',${ch.beats},${tempo})">▶ 試聴</button>
+      </div>`;
+    });
+    h+=`</div>`;
+  }
+
+  el.innerHTML=h;
+}
+
+// ── SCREEN 3: EDITOR ─────────────────────────────────────────
+const NATURALS=['C','D','E','F','G','A','B'];
+const ACCS=['Db','Eb','Gb','Ab','Bb'];
+
+// editor state
+const ES = {};
+function getES(pid){
+  if(!ES[pid])ES[pid]={
+    tab:'notes', // 'notes' | 'chords' | 'midi'
+    selIdx:-1,
+    note:'C',octave:4,dur:.5,
+    ceOpen:false,ceIdx:-1,ceRoot:'C',ceQuality:'7',ceBeats:4,
+  };
+  return ES[pid];
+}
+
+function renderEditor(){
+  const el=document.getElementById('screen-editor');
+  const phrase=getPhrase(activePhraseId);
+  if(!phrase){el.innerHTML=`<div style="padding:40px;text-align:center;color:var(--dim)">フレーズを選んでください</div>`;return;}
+  const pid=phrase.id, es=getES(pid);
+
+  let h=``;
+
+  // meta inputs
+  h+=`<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px">
+    <input type="text" placeholder="フレーズ名" value="${esc(phrase.title)}" style="background:var(--surface);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:.85rem;padding:10px 12px;border-radius:5px;outline:none;width:100%"
+      oninput="getPhrase(${pid}).title=this.value;save();renderList();updateTopbarTitle()">
+    <input type="text" placeholder="メモ（曲名など）" value="${esc(phrase.sub)}" style="background:var(--surface);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:.85rem;padding:10px 12px;border-radius:5px;outline:none;width:100%"
+      oninput="getPhrase(${pid}).sub=this.value;save()">
+  </div>`;
+
+  // editor tabs
+  h+=`<div class="editor-tabs">
+    <div class="etab${es.tab==='notes'?' active':''}" onclick="setETab(${pid},'notes')">音符</div>
+    <div class="etab${es.tab==='chords'?' active':''}" onclick="setETab(${pid},'chords')">コード</div>
+    <div class="etab${es.tab==='midi'?' active':''}" onclick="setETab(${pid},'midi')">MIDIインポート</div>
+  </div>`;
+
+  // ── NOTES TAB
+  if(es.tab==='notes'){
+    // note input panel
+    h+=`<div class="note-input-panel${es.selIdx>=0?' open':''}" id="nip-${pid}">
+      <div class="nip-title">${es.selIdx>=0?`✎ #${es.selIdx+1} を編集`:'音符を追加'}</div>
+      <div class="nip-preview">${es.note}${es.octave}</div>
+      <div class="btn-grid-7">${NATURALS.map(n=>`<button class="nbtn${n===es.note?' sel':''}" onclick="setENote(${pid},'${n}')">${n}</button>`).join('')}</div>
+      <div class="btn-grid-5">${ACCS.map(n=>`<button class="nbtn acc${n===es.note?' sel':''}" onclick="setENote(${pid},'${n}')">${n}</button>`).join('')}</div>
+      <div class="btn-row"><span class="row-tag">オクターブ</span>
+        ${[3,4,5].map(o=>`<button class="qbtn${o===es.octave?' sel':''}" onclick="setEOct(${pid},${o})">${o}</button>`).join('')}
+      </div>
+      <div class="btn-row"><span class="row-tag">長さ</span>
+        ${DURS.map(d=>`<button class="qbtn${Math.abs(d.b-es.dur)<.01?' sel':''}" onclick="setEDur(${pid},${d.b})">${d.l}</button>`).join('')}
+      </div>
+      <div class="nip-actions">
+        <button class="action-btn" onclick="previewENote(${pid})">▶ 試聴</button>
+        <button class="action-btn ok" onclick="commitENote(${pid})">${es.selIdx>=0?'✓ 更新':'＋ 追加'}</button>
+        ${es.selIdx>=0?`<button class="action-btn del" onclick="deleteENote(${pid})">削除</button>`:''}
+        ${es.selIdx>=0?`<button class="action-btn" onclick="closeENotePanel(${pid})">閉じる</button>`:''}
+      </div>
+    </div>`;
+
+    // note list
+    if(phrase.notes.length){
+      h+=`<div class="edit-note-list">`;
+      const bpb=phrase.beatsPerBar||4; let ba=0;
+      phrase.notes.forEach((n,i)=>{
+        const dl=DURS.find(d=>Math.abs(d.b-n.dur)<.01)?.l||n.dur;
+        if(i>0&&Math.abs(ba%bpb)<.01)
+          h+=`<div style="font-size:.6rem;color:var(--accent);padding:2px 0;letter-spacing:.06em">── 小節 ${Math.round(ba/bpb)+1} ──</div>`;
+        h+=`<div class="edit-note-row${es.selIdx===i?' selected':''}" onclick="selectENote(${pid},${i})">
+          <span class="edit-note-num">${i+1}</span>
+          <span class="edit-note-name">${n.name}${n.octave}</span>
+          <span class="edit-note-dur-label">${dl}</span>
+        </div>`;
+        ba+=n.dur;
+      });
+      h+=`</div>`;
+    } else {
+      h+=`<div style="font-size:.72rem;color:var(--dim);font-style:italic;text-align:center;padding:20px 0">音符がありません</div>`;
+    }
+
+    // beats per bar
+    const bpb=phrase.beatsPerBar||4;
+    h+=`<div class="divider"></div>
+    <div class="btn-row"><span class="row-tag">拍子 (1小節)</span>
+      ${[3,4,5,6,7,8].map(b=>`<button class="qbtn${bpb===b?' sel':''}" onclick="getPhrase(${pid}).beatsPerBar=${b};save();renderEditor();renderPlayer()">${b}</button>`).join('')}
+    </div>`;
+
+    // add button when no note selected
+    if(es.selIdx<0){
+      h+=`<button class="ghost-btn accent" onclick="openAddNote(${pid})" style="margin-top:8px">＋ 音符を追加</button>`;
+    }
+
+    // delete phrase
+    h+=`<div class="divider"></div><button class="del-phrase-btn" onclick="delPhrase(${pid})">このフレーズを削除</button>`;
+  }
+
+  // ── CHORDS TAB
+  if(es.tab==='chords'){
+    h+=`<div class="chord-editor-list">`;
+    (phrase.chords||[]).forEach((ch,ci)=>{
+      h+=`<div class="chord-edit-row">
+        <div class="chord-edit-name">${chordName(ch.root,ch.quality)}</div>
+        <div class="chord-edit-beats">${ch.beats}拍</div>
+        <button class="icon-btn g" onclick="previewChord('${ch.root}','${ch.quality}',${ch.beats},${phrase.tempo||100})">▶</button>
+        <button class="icon-btn" onclick="openCIP(${pid},${ci})">編集</button>
+        <button class="icon-btn r" onclick="rmChord(${pid},${ci})">✕</button>
+      </div>`;
+    });
+    h+=`</div>`;
+
+    // chord input panel
+    const cip=es.ceOpen;
+    h+=`<div class="chord-input-panel${cip?' open':''}">
+      <div class="cip-preview">${cip?chordName(es.ceRoot,es.ceQuality):''}</div>
+      <div class="btn-row"><span class="row-tag">ルート</span>
+        ${NATURALS.map(n=>`<button class="nbtn${n===es.ceRoot?' sel':''}" onclick="setCeRoot2(${pid},'${n}')">${n}</button>`).join('')}
+      </div>
+      <div class="btn-row" style="margin-top:4px"><span class="row-tag" style="visibility:hidden">　</span>
+        ${ACCS.map(n=>`<button class="nbtn acc${n===es.ceRoot?' sel':''}" onclick="setCeRoot2(${pid},'${n}')">${n}</button>`).join('')}
+      </div>
+      <div class="btn-row" style="margin-top:8px"><span class="row-tag">種類</span>
+        ${QUALITIES.map(q=>`<button class="qbtn${q.key===es.ceQuality?' sel':''}" onclick="setCeQ2(${pid},'${q.key}')">${q.label}</button>`).join('')}
+      </div>
+      <div class="btn-row" style="margin-top:8px"><span class="row-tag">拍数</span>
+        ${[1,2,3,4,6,8].map(b=>`<button class="qbtn${b===es.ceBeats?' sel':''}" onclick="setCeB2(${pid},${b})">${b}</button>`).join('')}
+      </div>
+      <div class="nip-actions">
+        <button class="action-btn" onclick="previewChord('${es.ceRoot}','${es.ceQuality}',${es.ceBeats},${phrase.tempo||100})">▶ 試聴</button>
+        <button class="action-btn ok" onclick="commitCIP(${pid})">${es.ceIdx>=0?'✓ 更新':'＋ 追加'}</button>
+        <button class="action-btn" onclick="closeCIP(${pid})">キャンセル</button>
+      </div>
+    </div>`;
+
+    h+=`<button class="ghost-btn" onclick="openCIP(${pid},-1)">＋ コードを追加</button>`;
+  }
+
+  // ── MIDI TAB
+  if(es.tab==='midi'){
+    h+=`<div class="midi-area">
+      <div class="hint">「62, 0.5, 63, 0.5, ...」形式でコピペして読み込み（現在の音符は上書きされます）</div>
+      <textarea id="midi-ta-${pid}" rows="5" placeholder="62, 0.5, 63, 0.5, 64, 0.5 ..."></textarea>
+      <div style="display:flex;gap:8px;margin-top:10px">
+        <button class="ghost-btn accent" style="flex:2" onclick="importMidi(${pid})">＋ 読み込み（上書き）</button>
+        <button class="ghost-btn" style="flex:1" onclick="getPhrase(${pid}).notes=[];save();renderEditor();renderPlayer()">全削除</button>
+      </div>
+      <div class="midi-msg" id="midi-msg-${pid}"></div>
+    </div>`;
+  }
+
+  el.innerHTML=h;
+}
+
+// ── Editor actions ────────────────────────────────────────────
+function setETab(pid,tab){ getES(pid).tab=tab; renderEditor(); }
+
+function openAddNote(pid){ const es=getES(pid); es.selIdx=-1; renderEditor(); document.getElementById('nip-'+pid)?.scrollIntoView({behavior:'smooth',block:'nearest'}); }
+function selectENote(pid,i){
+  const es=getES(pid), p=getPhrase(pid);
+  if(es.selIdx===i){ closeENotePanel(pid); return; }
+  es.selIdx=i;
+  if(p.notes[i]){const n=p.notes[i];es.note=n.name;es.octave=n.octave;es.dur=n.dur;}
+  renderEditor();
+  document.getElementById('nip-'+pid)?.scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+function closeENotePanel(pid){ getES(pid).selIdx=-1; renderEditor(); }
+function setENote(pid,n){ getES(pid).note=n; previewENote(pid); renderEditor(); }
+function setEOct(pid,o){ getES(pid).octave=o; previewENote(pid); renderEditor(); }
+function setEDur(pid,d){ getES(pid).dur=d; renderEditor(); }
+function previewENote(pid){ const es=getES(pid),f=NF[es.note+es.octave]; if(f)playTone(f,getCtx().currentTime,.35,.45); }
+function commitENote(pid){
+  const es=getES(pid),p=getPhrase(pid);
+  const note={name:es.note,octave:es.octave,dur:es.dur};
+  if(es.selIdx>=0) p.notes[es.selIdx]=note;
+  else p.notes.push(note);
+  es.selIdx=-1; save(); renderEditor(); renderPlayer();
+}
+function deleteENote(pid){
+  const es=getES(pid),p=getPhrase(pid);
+  if(es.selIdx>=0)p.notes.splice(es.selIdx,1);
+  es.selIdx=-1; save(); renderEditor(); renderPlayer();
+}
+
+// chord actions
+function openCIP(pid,idx){
+  const es=getES(pid),p=getPhrase(pid);
+  es.ceOpen=true;es.ceIdx=idx;
+  if(idx>=0&&p.chords[idx]){const c=p.chords[idx];es.ceRoot=c.root;es.ceQuality=c.quality;es.ceBeats=c.beats;}
+  else{es.ceRoot='C';es.ceQuality='7';es.ceBeats=4;}
+  renderEditor();
+}
+function closeCIP(pid){const es=getES(pid);es.ceOpen=false;es.ceIdx=-1;renderEditor();}
+function setCeRoot2(pid,r){getES(pid).ceRoot=r;renderEditor();}
+function setCeQ2(pid,q){getES(pid).ceQuality=q;renderEditor();}
+function setCeB2(pid,b){getES(pid).ceBeats=b;renderEditor();}
+function commitCIP(pid){
+  const es=getES(pid),p=getPhrase(pid);
+  const ch={root:es.ceRoot,quality:es.ceQuality,beats:es.ceBeats};
+  if(es.ceIdx>=0)p.chords[es.ceIdx]=ch;
+  else{p.chords=p.chords||[];p.chords.push(ch);}
+  es.ceOpen=false;es.ceIdx=-1;save();renderEditor();renderPlayer();
+}
+function rmChord(pid,ci){getPhrase(pid).chords.splice(ci,1);save();renderEditor();renderPlayer();}
+
+// MIDI
+function midiToNote(m){const nm=['C','Db','D','Eb','E','F','Gb','G','Ab','A','Bb','B'];return{name:nm[m%12],octave:Math.floor(m/12)-1};}
+function importMidi(pid){
+  const ta=document.getElementById('midi-ta-'+pid);
+  const msg=document.getElementById('midi-msg-'+pid);
+  const raw=ta?.value?.trim();
+  if(!raw){msg.textContent='⚠ 入力がありません';return;}
+  const nums=raw.split(/[\s,]+/).map(Number).filter(v=>!isNaN(v));
+  if(nums.length<2||nums.length%2!==0){msg.textContent=`⚠ 数値の個数が奇数(${nums.length}個)`;return;}
+  const notes=[];
+  for(let i=0;i<nums.length;i+=2){
+    const midi=nums[i],dur=nums[i+1];
+    if(midi<21||midi>108){msg.textContent=`⚠ MIDI番号 ${midi} は範囲外`;return;}
+    notes.push({...midiToNote(midi),dur});
+  }
+  getPhrase(pid).notes=notes; save(); ta.value='';
+  msg.textContent=`✓ ${notes.length}音符を読み込みました`;
+  setTimeout(()=>{msg.textContent='';},3000);
+  renderEditor(); renderPlayer();
+}
+
+// ── Chapter/Phrase management ─────────────────────────────────
+let _modalCb=null;
+function openModal(title,placeholder,cb,def=''){
+  document.getElementById('modal-title').textContent=title;
+  const inp=document.getElementById('modal-input');
+  inp.placeholder=placeholder;inp.value=def;
+  document.getElementById('modal').classList.add('open');
+  _modalCb=cb; setTimeout(()=>inp.focus(),80);
+}
+function closeModal(){document.getElementById('modal').classList.remove('open');_modalCb=null;}
+function modalOk(){const v=document.getElementById('modal-input').value.trim();if(_modalCb)_modalCb(v);closeModal();}
+document.getElementById('modal-input').addEventListener('keydown',e=>{if(e.key==='Enter')modalOk();});
+
+function toggleChapter(cid){const ch=getChapter(cid);if(ch)ch.open=!ch.open;save();renderList();}
+function renameChapter(cid){
+  const ch=getChapter(cid);
+  openModal('Chapter名を変更','',name=>{if(!name)return;ch.title=name;save();renderList();},(ch?.title||''));
+}
+function addChapter(){
+  openModal('新しいChapter名','例: Chapter 2 — スケール',name=>{
+    if(!name)return;
+    const ch={id:mkId(),title:name,open:true,phrases:[]};
+    db.chapters.push(ch);save();renderList();
+  });
+}
+function addPhrase(cid){
+  const ch=getChapter(cid);
+  openModal('フレーズ名','例: 短2度上行 — Blue Monk',name=>{
+    if(!name)return;
+    const p={id:mkId(),title:name,sub:'',notes:[],chords:[{root:'C',quality:'7',beats:4}],tempo:100,beatsPerBar:4};
+    ch.phrases.push(p);activePhraseId=p.id;save();renderList();renderPlayer();renderEditor();showScreen('player');
+  });
+}
+function delPhrase(pid){
+  for(const ch of db.chapters){
+    const idx=ch.phrases.findIndex(p=>p.id===pid);
+    if(idx>=0){
+      ch.phrases.splice(idx,1);
+      activePhraseId=ch.phrases[0]?.id??db.chapters[0]?.phrases[0]?.id??null;
+      save();renderList();renderPlayer();renderEditor();showScreen('list');return;
+    }
+  }
+}
+
+// ── Export / Import ───────────────────────────────────────────
+function exportData(){
+  const json=JSON.stringify({version:3,db},null,2);
+  const blob=new Blob([json],{type:'application/json'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;a.download=`jazz-phrase-book-${new Date().toISOString().slice(0,10)}.json`;
+  a.click();URL.revokeObjectURL(url);
+}
+function importData(event){
+  const file=event.target.files[0];if(!file)return;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    try{
+      const obj=JSON.parse(e.target.result);
+      if(!obj.db?.chapters)throw new Error('フォーマットが違います');
+      db=obj.db;
+      activePhraseId=db.chapters[0]?.phrases[0]?.id??null;
+      save();renderList();renderPlayer();renderEditor();showScreen('list');
+      alert(`✓ 読み込みました (${db.chapters.length} Chapter)`);
+    }catch(err){alert('読み込み失敗: '+err.message);}
+  };
+  reader.readAsText(file);event.target.value='';
+}
+
+// ── Init ──────────────────────────────────────────────────────
+renderList();
+renderPlayer();
+renderEditor();
+</script>
+</body>
+</html>
