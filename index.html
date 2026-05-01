@@ -770,143 +770,42 @@ function renderEditor(){
   const el=document.getElementById('screen-editor');
   const phrase=getPhrase(activePhraseId);
   if(!phrase){el.innerHTML=`<div style="padding:40px;text-align:center;color:var(--dim)">フレーズを選んでください</div>`;return;}
-  const pid=phrase.id, es=getES(pid);
+  const pid=phrase.id;
+  let h='';
 
-  let h=``;
-
-  // meta inputs
+  // meta
   h+=`<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px">
-    <input type="text" placeholder="フレーズ名" value="${esc(phrase.title)}" style="background:var(--surface);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:.85rem;padding:10px 12px;border-radius:5px;outline:none;width:100%"
+    <input type="text" placeholder="フレーズ名" value="${esc(phrase.title)}"
+      style="background:var(--surface);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:.85rem;padding:10px 12px;border-radius:5px;outline:none;width:100%"
       oninput="getPhrase(${pid}).title=this.value;save();renderList();updateTopbarTitle()">
-    <input type="text" placeholder="メモ（曲名など）" value="${esc(phrase.sub)}" style="background:var(--surface);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:.85rem;padding:10px 12px;border-radius:5px;outline:none;width:100%"
+    <input type="text" placeholder="メモ（曲名など）" value="${esc(phrase.sub)}"
+      style="background:var(--surface);border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:.85rem;padding:10px 12px;border-radius:5px;outline:none;width:100%"
       oninput="getPhrase(${pid}).sub=this.value;save()">
   </div>`;
 
-  // editor tabs
-  h+=`<div class="editor-tabs">
-    <div class="etab${es.tab==='notes'?' active':''}" onclick="setETab(${pid},'notes')">音符</div>
-    <div class="etab${es.tab==='chords'?' active':''}" onclick="setETab(${pid},'chords')">コード</div>
-    <div class="etab${es.tab==='midi'?' active':''}" onclick="setETab(${pid},'midi')">MIDIインポート</div>
+  // beats per bar
+  const bpb=phrase.beatsPerBar||4;
+  h+=`<div class="btn-row" style="margin-bottom:14px"><span class="row-tag">拍子 (1小節)</span>
+    ${[3,4,5,6,7,8].map(b=>`<button class="qbtn${bpb===b?' sel':''}" onclick="getPhrase(${pid}).beatsPerBar=${b};save();renderEditor();renderPlayer()">${b}</button>`).join('')}
   </div>`;
 
-  // ── NOTES TAB
-  if(es.tab==='notes'){
-    // note input panel
-    h+=`<div class="note-input-panel${(es.selIdx>=0||es.nipOpen)?' open':''}" id="nip-${pid}">
-      <div class="nip-title">${es.selIdx>=0?`✎ #${es.selIdx+1} を編集`:'音符を追加'}</div>
-      <div class="nip-preview">${es.note}${es.octave}</div>
-      <div class="btn-grid-7">${NATURALS.map(n=>`<button class="nbtn${n===es.note?' sel':''}" onclick="setENote(${pid},'${n}')">${n}</button>`).join('')}</div>
-      <div class="btn-grid-5">${ACCS.map(n=>`<button class="nbtn acc${n===es.note?' sel':''}" onclick="setENote(${pid},'${n}')">${n}</button>`).join('')}</div>
-      <div class="btn-row"><span class="row-tag">オクターブ</span>
-        ${[3,4,5].map(o=>`<button class="qbtn${o===es.octave?' sel':''}" onclick="setEOct(${pid},${o})">${o}</button>`).join('')}
-      </div>
-      <div class="btn-row"><span class="row-tag">長さ</span>
-        ${DURS.map(d=>`<button class="qbtn${Math.abs(d.b-es.dur)<.01?' sel':''}" onclick="setEDur(${pid},${d.b})">${noteSvg(d.b)}</button>`).join('')}
-      </div>
-      <div class="btn-row"><span class="row-tag">タイ</span>
-        <button class="qbtn${es.tie?' sel':''}" onclick="setETie(${pid},${!es.tie})">⌣ タイ</button>
-      </div>
-      <div class="nip-actions">
-        <button class="action-btn" onclick="previewENote(${pid})">▶ 試聴</button>
-        <button class="action-btn ok" onclick="commitENote(${pid})">${es.selIdx>=0?'✓ 更新':'＋ 追加'}</button>
-        ${es.selIdx>=0?`<button class="action-btn" onclick="insertAfterENote(${pid})">後に挿入</button>`:''}
-        ${es.selIdx>=0?`<button class="action-btn del" onclick="deleteENote(${pid})">削除</button>`:''}
-        ${es.selIdx>=0?`<button class="action-btn" onclick="closeENotePanel(${pid})">閉じる</button>`:''}
-      </div>
-    </div>`;
+  // MIDI import
+  h+=`<div class="sec-label">MIDIインポート</div>`;
+  h+=`<div class="midi-area">
+    <div class="hint">「62, 0.5, 63, 0.5, ...」形式でコピペして読み込み（現在の音符は上書きされます）</div>
+    <textarea id="midi-ta-${pid}" rows="5" placeholder="62, 0.5, 63, 0.5, 64, 0.5 ..."></textarea>
+    <div style="display:flex;gap:8px;margin-top:10px">
+      <button class="ghost-btn accent" style="flex:2" onclick="importMidi(${pid})">＋ 読み込み（上書き）</button>
+      <button class="ghost-btn" style="flex:1" onclick="getPhrase(${pid}).notes=[];save();renderEditor();renderPlayer()">全削除</button>
+    </div>
+    <div class="midi-msg" id="midi-msg-${pid}"></div>
+  </div>`;
 
-    // note list
-    if(phrase.notes.length){
-      h+=`<div class="edit-note-list">`;
-      const bpb=phrase.beatsPerBar||4; let ba=0;
-      phrase.notes.forEach((n,i)=>{
-        if(i>0&&Math.abs(ba%bpb)<.01)
-          h+=`<div style="font-size:.6rem;color:var(--accent);padding:2px 0;letter-spacing:.06em">── 小節 ${Math.round(ba/bpb)+1} ──</div>`;
-        h+=`<div class="edit-note-row${es.selIdx===i?' selected':''}" onclick="selectENote(${pid},${i})">
-          <span class="edit-note-num">${i+1}</span>
-          <span class="edit-note-name">${n.name}${n.octave}</span>
-          <span class="edit-note-dur-label">${noteSvg(n.dur,{small:true})}</span>
-        </div>`;
-        ba+=n.dur;
-      });
-      h+=`</div>`;
-    } else {
-      h+=`<div style="font-size:.72rem;color:var(--dim);font-style:italic;text-align:center;padding:20px 0">音符がありません</div>`;
-    }
-
-    // beats per bar
-    const bpb=phrase.beatsPerBar||4;
-    h+=`<div class="divider"></div>
-    <div class="btn-row"><span class="row-tag">拍子 (1小節)</span>
-      ${[3,4,5,6,7,8].map(b=>`<button class="qbtn${bpb===b?' sel':''}" onclick="getPhrase(${pid}).beatsPerBar=${b};save();renderEditor();renderPlayer()">${b}</button>`).join('')}
-    </div>`;
-
-    // add button when no note selected
-    if(es.selIdx<0){
-      h+=`<button class="ghost-btn accent" onclick="openAddNote(${pid})" style="margin-top:8px">＋ 音符を追加</button>`;
-    }
-
-    // delete phrase
-    h+=`<div class="divider"></div><button class="del-phrase-btn" onclick="delPhrase(${pid})">このフレーズを削除</button>`;
-  }
-
-  // ── CHORDS TAB
-  if(es.tab==='chords'){
-    h+=`<div class="chord-editor-list">`;
-    (phrase.chords||[]).forEach((ch,ci)=>{
-      h+=`<div class="chord-edit-row">
-        <div class="chord-edit-name">${chordName(ch.root,ch.quality)}</div>
-        <div class="chord-edit-beats">${ch.beats}拍</div>
-        <button class="icon-btn g" onclick="previewChord('${ch.root}','${ch.quality}',${ch.beats},${phrase.tempo||100})">▶</button>
-        <button class="icon-btn" onclick="openCIP(${pid},${ci})">編集</button>
-        <button class="icon-btn r" onclick="rmChord(${pid},${ci})">✕</button>
-      </div>`;
-    });
-    h+=`</div>`;
-
-    // chord input panel
-    const cip=es.ceOpen;
-    h+=`<div class="chord-input-panel${cip?' open':''}">
-      <div class="cip-preview">${cip?chordName(es.ceRoot,es.ceQuality):''}</div>
-      <div class="btn-row"><span class="row-tag">ルート</span>
-        ${NATURALS.map(n=>`<button class="nbtn${n===es.ceRoot?' sel':''}" onclick="setCeRoot2(${pid},'${n}')">${n}</button>`).join('')}
-      </div>
-      <div class="btn-row" style="margin-top:4px"><span class="row-tag" style="visibility:hidden">　</span>
-        ${ACCS.map(n=>`<button class="nbtn acc${n===es.ceRoot?' sel':''}" onclick="setCeRoot2(${pid},'${n}')">${n}</button>`).join('')}
-      </div>
-      <div class="btn-row" style="margin-top:8px"><span class="row-tag">種類</span>
-        ${QUALITIES.map(q=>`<button class="qbtn${q.key===es.ceQuality?' sel':''}" onclick="setCeQ2(${pid},'${q.key}')">${q.label}</button>`).join('')}
-      </div>
-      <div class="btn-row" style="margin-top:8px"><span class="row-tag">拍数</span>
-        ${[1,2,3,4,6,8].map(b=>`<button class="qbtn${b===es.ceBeats?' sel':''}" onclick="setCeB2(${pid},${b})">${b}</button>`).join('')}
-      </div>
-      <div class="nip-actions">
-        <button class="action-btn" onclick="previewChord('${es.ceRoot}','${es.ceQuality}',${es.ceBeats},${phrase.tempo||100})">▶ 試聴</button>
-        <button class="action-btn ok" onclick="commitCIP(${pid})">${es.ceIdx>=0?'✓ 更新':'＋ 追加'}</button>
-        ${es.ceIdx>=0?`<button class="action-btn" onclick="insertAfterEC(${pid})">後に挿入</button>`:''}
-        <button class="action-btn" onclick="closeCIP(${pid})">キャンセル</button>
-      </div>
-    </div>`;
-
-    h+=`<button class="ghost-btn" onclick="openCIP(${pid},-1)">＋ コードを追加</button>`;
-  }
-
-  // ── MIDI TAB
-  if(es.tab==='midi'){
-    h+=`<div class="midi-area">
-      <div class="hint">「62, 0.5, 63, 0.5, ...」形式でコピペして読み込み（現在の音符は上書きされます）</div>
-      <textarea id="midi-ta-${pid}" rows="5" placeholder="62, 0.5, 63, 0.5, 64, 0.5 ..."></textarea>
-      <div style="display:flex;gap:8px;margin-top:10px">
-        <button class="ghost-btn accent" style="flex:2" onclick="importMidi(${pid})">＋ 読み込み（上書き）</button>
-        <button class="ghost-btn" style="flex:1" onclick="getPhrase(${pid}).notes=[];save();renderEditor();renderPlayer()">全削除</button>
-      </div>
-      <div class="midi-msg" id="midi-msg-${pid}"></div>
-    </div>`;
-  }
+  // delete
+  h+=`<div class="divider"></div><button class="del-phrase-btn" onclick="delPhrase(${pid})">このフレーズを削除</button>`;
 
   el.innerHTML=h;
 }
-
 // ── Editor actions ────────────────────────────────────────────
 function setETab(pid,tab){ getES(pid).tab=tab; renderEditor(); }
 
